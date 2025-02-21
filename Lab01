@@ -286,6 +286,84 @@ Crearemos un playbook (por ejemplo, `azure_infra.yml`) que incluya las siguiente
          version: latest
        location: eastus
    ```
+
+YAML completo:
+
+---
+- name: Provisionar Infraestructura en Azure para Cluster Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Crear grupo de recursos
+      azure_rm_resourcegroup:
+        name: rg-k8s-taller
+        location: eastus
+
+    - name: Crear red virtual
+      azure_rm_virtualnetwork:
+        resource_group: rg-k8s-taller
+        name: vnet-k8s
+        address_prefixes: "10.0.0.0/16"
+        location: eastus
+
+    - name: Crear subred
+      azure_rm_subnet:
+        resource_group: rg-k8s-taller
+        name: subnet-k8s
+        address_prefix: "10.0.1.0/24"
+        virtual_network: vnet-k8s
+
+    - name: Crear NIC para control plane
+      azure_rm_networkinterface:
+        resource_group: rg-k8s-taller
+        name: nic-control
+        virtual_network: vnet-k8s
+        subnet: subnet-k8s
+        location: eastus
+
+    - name: Crear NIC para worker
+      azure_rm_networkinterface:
+        resource_group: rg-k8s-taller
+        name: nic-worker
+        virtual_network: vnet-k8s
+        subnet: subnet-k8s
+        location: eastus
+
+    - name: Crear VM control plane
+      azure_rm_virtualmachine:
+        resource_group: rg-k8s-taller
+        name: vm-control
+        vm_size: Standard_D2s_v3
+        admin_username: azureuser
+        ssh_password_enabled: true
+        admin_password: "TuPasswordSeguro123!"
+        network_interfaces: [nic-control]
+        image:
+          publisher: Canonical
+          offer: UbuntuServer
+          sku: "22_04-lts-gen2"
+          version: latest
+        location: eastus
+
+    - name: Crear VM worker
+      azure_rm_virtualmachine:
+        resource_group: rg-k8s-taller
+        name: vm-worker
+        vm_size: Standard_D2s_v3
+        admin_username: azureuser
+        ssh_password_enabled: true
+        admin_password: "TuPasswordSeguro123!"
+        network_interfaces: [nic-worker]
+        image:
+          publisher: Canonical
+          offer: UbuntuServer
+          sku: "22_04-lts-gen2"
+          version: latest
+        location: eastus
+
+---
+
 > **Nota:** Asegúrate de ajustar las contraseñas y otros parámetros de seguridad de acuerdo a las buenas prácticas.
 
 Una vez ejecutado este playbook, obtendrás dos VMs en Azure. Registra las direcciones IP públicas para incluirlas en el inventario de Ansible.
