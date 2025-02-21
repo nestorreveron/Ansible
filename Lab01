@@ -398,7 +398,7 @@ YAML completo:
         vm_size: Standard_D2s_v3
         admin_username: azureuser
         ssh_password_enabled: true
-        admin_password: "Pa55w0rd1234!"
+        admin_password: "TuPasswordSeguro123!"
         network_interfaces: [nic-worker]
         image:
           publisher: Canonical
@@ -424,10 +424,10 @@ Con las VMs ya provisionadas, se procede a instalar y configurar todo lo necesar
 #### Archivo de inventario (hosts.ini)
 ```ini
 [control]
-control ansible_host=<IP_PUBLICA_CONTROL> ansible_user=azureuser
+control ansible_host=<IP_PUBLICA_CONTROL> ansible_user=azureuser ansible_password=TuPasswordSeguro123!
 
 [worker]
-worker ansible_host=<IP_PUBLICA_WORKER> ansible_user=azureuser
+worker ansible_host=<IP_PUBLICA_WORKER> ansible_user=azureuser ansible_password=TuPasswordSeguro123!
 ```
 
 #### Playbook para configuración de nodos
