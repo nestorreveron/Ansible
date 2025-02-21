@@ -131,6 +131,11 @@ source ~/.bashrc
 
 De esta forma, al ejecutar tus playbooks de Ansible que usen módulos azure_rm_ (como azure_rm_virtualmachine, azure_rm_resourcegroup, etc.), Ansible tomará automáticamente estas variables para autenticarse en Azure.
 
+
+Para probar:
+
+#Ansible with azure.azcollection
+ansible localhost -m azure.azcollection.azure_rm_resourcegroup -a "name=<resource_group_name> location=<location>"
 ________________________________________
 
 Resumen Final
