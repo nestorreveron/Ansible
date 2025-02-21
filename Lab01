@@ -120,10 +120,10 @@ tenant=<service_principal_tenant_id>
 
 Por ejemplo:
 
-export AZURE_SUBSCRIPTION_ID="12345678-90ab-cdef-1234-567890abcdef"
-export AZURE_CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-export AZURE_SECRET="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
-export AZURE_TENANT="zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+subscription_id="12345678-90ab-cdef-1234-567890abcdef"
+client_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+secret="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+tenant="zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
 
 Después de agregarlas al archivo, ejecuta:
 
