@@ -347,7 +347,7 @@ YAML completo:
         image:
           publisher: Canonical
           offer: UbuntuServer
-          sku: "22_04-lts-gen2"
+          sku: "Ubuntu2204"
           version: latest
         location: eastus
         auth_source: cli
@@ -364,7 +364,7 @@ YAML completo:
         image:
           publisher: Canonical
           offer: UbuntuServer
-          sku: "22_04-lts-gen2"
+          sku: "Ubuntu2204"
           version: latest
         location: eastus
         auth_source: cli
