@@ -290,17 +290,25 @@ Crearemos un playbook (por ejemplo, `azure_infra.yml`) que incluya las siguiente
 YAML completo:
 
 ---
-- name: Provisionar Infraestructura en Azure para Cluster Kubernetes
+---
+- name: Provisionar Infraestructura en Azure para Cluster Kubernetes con IP pública
   hosts: localhost
   connection: local
   gather_facts: no
+
   tasks:
+    ###########################################################################
+    # 1. Crear grupo de recursos
+    ###########################################################################
     - name: Crear grupo de recursos
       azure_rm_resourcegroup:
         name: rg-k8s-taller
         location: eastus
         auth_source: cli
 
+    ###########################################################################
+    # 2. Crear Red Virtual y Subred
+    ###########################################################################
     - name: Crear red virtual
       azure_rm_virtualnetwork:
         resource_group: rg-k8s-taller
@@ -317,24 +325,55 @@ YAML completo:
         virtual_network: vnet-k8s
         auth_source: cli
 
+    ###########################################################################
+    # 3. Crear direcciones IP públicas
+    ###########################################################################
+    - name: Crear IP pública para VM de control plane
+      azure_rm_publicipaddress:
+        resource_group: rg-k8s-taller
+        name: pip-control
+        allocation_method: Dynamic  # Puedes usar Static si prefieres IP fija
+        location: eastus
+        auth_source: cli
+
+    - name: Crear IP pública para VM de worker
+      azure_rm_publicipaddress:
+        resource_group: rg-k8s-taller
+        name: pip-worker
+        allocation_method: Dynamic
+        location: eastus
+        auth_source: cli
+
+    ###########################################################################
+    # 4. Crear NICs y asociar IPs públicas
+    ###########################################################################
     - name: Crear NIC para control plane
       azure_rm_networkinterface:
         resource_group: rg-k8s-taller
         name: nic-control
+        location: eastus
         virtual_network: vnet-k8s
         subnet: subnet-k8s
-        location: eastus
+        ip_configurations:
+          - name: ipconfig-control
+            public_ip_address_name: pip-control
         auth_source: cli
 
     - name: Crear NIC para worker
       azure_rm_networkinterface:
         resource_group: rg-k8s-taller
         name: nic-worker
+        location: eastus
         virtual_network: vnet-k8s
         subnet: subnet-k8s
-        location: eastus
+        ip_configurations:
+          - name: ipconfig-worker
+            public_ip_address_name: pip-worker
         auth_source: cli
 
+    ###########################################################################
+    # 5. Crear las VMs (Control Plane y Worker)
+    ###########################################################################
     - name: Crear VM control plane
       azure_rm_virtualmachine:
         resource_group: rg-k8s-taller
@@ -346,8 +385,8 @@ YAML completo:
         network_interfaces: [nic-control]
         image:
           publisher: Canonical
-          offer: "0001-com-ubuntu-server-jammy"
-          sku: "22_04-lts"
+          offer: UbuntuServer
+          sku: "22_04-lts-gen2"
           version: latest
         location: eastus
         auth_source: cli
@@ -359,15 +398,16 @@ YAML completo:
         vm_size: Standard_D2s_v3
         admin_username: azureuser
         ssh_password_enabled: true
-        admin_password: "TuPasswordSeguro123!"
+        admin_password: "Pa55w0rd1234!"
         network_interfaces: [nic-worker]
         image:
           publisher: Canonical
-          offer: "0001-com-ubuntu-server-jammy"
-          sku: "22_04-lts"
+          offer: UbuntuServer
+          sku: "22_04-lts-gen2"
           version: latest
         location: eastus
         auth_source: cli
+
 
 ---
 
