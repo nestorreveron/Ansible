@@ -112,10 +112,11 @@ máquina de control (Opcional: puedes agregarlas a tu archivo ~/.bashrc o ~/.pro
 mkdir ~/.azure
 vi ~/.azure/credentials
 
-export AZURE_SUBSCRIPTION_ID="<TU_SUBSCRIPTION_ID>"
-export AZURE_CLIENT_ID="<APP_ID_DEL_SP>"
-export AZURE_SECRET="<PASSWORD_DEL_SP>"
-export AZURE_TENANT="<TENANT_ID_DEL_SP>"
+[default]
+subscription_id=<subscription_id>
+client_id=<service_principal_app_id>
+secret=<service_principal_password>
+tenant=<service_principal_tenant_id>
 
 Por ejemplo:
 
