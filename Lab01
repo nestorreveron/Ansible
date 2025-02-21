@@ -106,7 +106,12 @@ ________________________________________
 
 5. Configurar las credenciales en Ansible
 
-Para que los módulos de Azure en Ansible se autentiquen correctamente, debes exponer las siguientes variables de entorno en la máquina de control (puedes agregarlas a tu archivo ~/.bashrc o ~/.profile):
+Para que los módulos de Azure en Ansible se autentiquen correctamente, debes exponer las siguientes variables de entorno en la 
+máquina de control (Opcional: puedes agregarlas a tu archivo ~/.bashrc o ~/.profile):
+
+mkdir ~/.azure
+vi ~/.azure/credentials
+
 export AZURE_SUBSCRIPTION_ID="<TU_SUBSCRIPTION_ID>"
 export AZURE_CLIENT_ID="<APP_ID_DEL_SP>"
 export AZURE_SECRET="<PASSWORD_DEL_SP>"
