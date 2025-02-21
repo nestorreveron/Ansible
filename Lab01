@@ -430,6 +430,27 @@ control ansible_host=<IP_PUBLICA_CONTROL> ansible_user=azureuser ansible_passwor
 worker ansible_host=<IP_PUBLICA_WORKER> ansible_user=azureuser ansible_password=TuPasswordSeguro123!
 ```
 
+Si desean probar que funciona:
+
+ansible -i hosts.ini control -m ping
+ansible -i hosts.ini worker -m ping
+
+Install:
+
+sudo apt-get install sshpass
+
+Crear en Home el archivo:
+
+vi ansible.cfg
+[defaults]
+host_key_checking = false
+
+Si desean probar que funciona:
+
+ansible -i hosts.ini control -m ping
+ansible -i hosts.ini worker -m ping
+
+
 #### Playbook para configuración de nodos
 ```yaml
 - name: Configurar nodos para Kubernetes
