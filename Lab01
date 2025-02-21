@@ -79,7 +79,10 @@ ________________________________________
 Un Service Principal es una identidad que le permite a Ansible (y otros clientes) autenticarse de forma programática en Azure sin necesidad de usar tus credenciales personales. Sigue estos pasos:
 1.	Obtén tu ID de suscripción:
 Ejecuta:
+az login
+
 az account show --query id -o tsv
+
 Guarda este valor, lo necesitarás para establecer el scope.
 
 2.	Crea el Service Principal:
