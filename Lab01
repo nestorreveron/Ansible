@@ -452,71 +452,173 @@ ansible -i hosts.ini worker -m ping
 
 
 #### Playbook para configuración de nodos
-```yaml
-- name: Configurar nodos para Kubernetes
+---
+- name: Configurar nodos Ubuntu 22.04 con containerd y Kubernetes 1.28
   hosts: control,worker
   become: yes
+  gather_facts: yes
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
   tasks:
+    ###########################################################################
+    # 1. Actualizar repositorios y paquetes (apt-get update && apt-get upgrade)
+    ###########################################################################
     - name: Actualizar repositorios y paquetes
       apt:
         update_cache: yes
         upgrade: dist
+        dpkg_options: "--force-confdef --force-confold"
 
-    - name: Instalar dependencias básicas
+    ###########################################################################
+    # 2. Instalar herramientas básicas (curl, vim, etc.)
+    ###########################################################################
+    - name: Instalar dependencias y utilidades
       apt:
         name:
+          - curl
           - apt-transport-https
           - ca-certificates
-          - curl
-          - gnupg
+          - vim
+          - git
+          - wget
+          - software-properties-common
           - lsb-release
+          - bash-completion
         state: present
+        update_cache: yes
 
+    ###########################################################################
+    # 3. Deshabilitar swap temporal y permanentemente
+    ###########################################################################
     - name: Deshabilitar swap temporalmente
       command: swapoff -a
 
-    - name: Deshabilitar swap de forma persistente
+    - name: Deshabilitar swap de forma persistente (comentando entradas en /etc/fstab)
       replace:
         path: /etc/fstab
         regexp: '(^.*swap.*$)'
         replace: '# \1'
-      notify: Reboot if necessary
 
-    - name: Instalar Docker
+    ###########################################################################
+    # 4. Cargar módulos necesarios (overlay y br_netfilter)
+    ###########################################################################
+    - name: Cargar módulos del kernel
+      shell: |
+        modprobe overlay
+        modprobe br_netfilter
+      args:
+        warn: false
+
+    ###########################################################################
+    # 5. Configurar parámetros de red para Kubernetes
+    ###########################################################################
+    - name: Configurar sysctl para Kubernetes
+      copy:
+        dest: /etc/sysctl.d/kubernetes.conf
+        content: |
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.bridge.bridge-nf-call-iptables = 1
+          net.ipv4.ip_forward = 1
+
+    - name: Aplicar cambios de sysctl
+      shell: sysctl --system
+
+    ###########################################################################
+    # 6. Instalar containerd
+    ###########################################################################
+    - name: Crear directorio para llaves GPG de Docker
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Importar llave GPG de Docker
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+
+    - name: Agregar repositorio Docker (para containerd)
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+        https://download.docker.com/linux/ubuntu \
+        $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    - name: Actualizar repositorios tras agregar Docker
       apt:
-        name: docker.io
-        state: present
+        update_cache: yes
 
-    - name: Habilitar e iniciar Docker
+    - name: Instalar containerd
+      apt:
+        name: containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Generar archivo de configuración por defecto de containerd
+      shell: |
+        containerd config default | tee /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Ajustar SystemdCgroup a true en /etc/containerd/config.toml
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+
+    - name: Reiniciar containerd
       systemd:
-        name: docker
+        name: containerd
+        state: restarted
         enabled: yes
-        state: started
 
-    - name: Agregar llave GPG de Kubernetes
-      apt_key:
-        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-        state: present
+    ###########################################################################
+    # 7. Instalar kubeadm, kubelet y kubectl (Kubernetes 1.28.x)
+    ###########################################################################
+    - name: Crear directorio para llaves GPG de Kubernetes
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
 
-    - name: Agregar repositorio de Kubernetes
-      apt_repository:
-        repo: "deb http://apt.kubernetes.io/ kubernetes-xenial main"
-        state: present
+    - name: Importar llave GPG de Kubernetes
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key \
+        | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-    - name: Instalar kubeadm, kubelet y kubectl
+    - name: Agregar repositorio Kubernetes 1.28
+      shell: |
+        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
+        https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" \
+        | tee /etc/apt/sources.list.d/kubernetes.list > /dev/null
+      args:
+        creates: /etc/apt/sources.list.d/kubernetes.list
+
+    - name: Actualizar repositorios tras agregar Kubernetes
       apt:
+        update_cache: yes
+
+    - name: Instalar kubeadm, kubelet y kubectl (versión 1.28.1-1.1)
+      apt:
+        name:
+          - kubeadm=1.28.1-1.1
+          - kubelet=1.28.1-1.1
+          - kubectl=1.28.1-1.1
+        state: present
+        update_cache: yes
+
+    - name: Marcar kubeadm, kubelet y kubectl para que no se actualicen automáticamente
+      apt_mark:
         name:
           - kubeadm
           - kubelet
           - kubectl
-        state: present
-        update_cache: yes
+        state: hold
 
-  handlers:
-    - name: Reboot if necessary
-      reboot:
-        msg: "Rebooting to apply swap changes"
-        pre_reboot_delay: 5
 ```
 
 Este playbook se encarga de actualizar el sistema, instalar las dependencias, Docker y los paquetes de Kubernetes, además de deshabilitar el swap (requisito para Kubernetes).
