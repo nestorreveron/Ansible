@@ -77,6 +77,8 @@ sudo add-apt-repository --yes --update ppa:ansible/ansible
 
 sudo apt install ansible
 
+###sudo apt --fix-broken install### en caso error ejecute esto
+
 # Install Ansible az collection for interacting with Azure. (optional)
 ansible-galaxy collection install azure.azcollection --force 
 
