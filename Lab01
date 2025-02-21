@@ -15,6 +15,125 @@
 - Conocimientos básicos de Linux, Kubernetes y Ansible.
 - (Opcional) Conocimientos básicos de YAML para entender la estructura de los playbooks.
 
+Pasos para pre-requisitos: 
+
+________________________________________
+
+1. Provisionar una VM en Azure con Ubuntu 22.04
+Puedes crear la VM utilizando el portal de Azure o la CLI. Aquí te muestro cómo hacerlo con la Azure CLI:
+
+
+1.	Inicia sesión en Azure:
+2.	az login
+Esto abrirá una ventana en tu navegador para autenticarte. Si ya tienes la sesión iniciada, se mostrará la información de tu cuenta.
+3.	Crea un grupo de recursos (si aún no lo tienes):
+4.	az group create --name myResourceGroup --location eastus
+5.	Crea la VM especificando Ubuntu 22.04:
+Para asegurarte de usar Ubuntu 22.04, utiliza la imagen de Canonical para "jammy". Puedes ejecutar:
+az vm create \
+  --resource-group myResourceGroup \
+  --name myAnsibleVM \
+  --image Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest \
+  --admin-username azureuser \
+  --generate-ssh-keys \
+  --size Standard_D2s_v3
+
+
+Con esto tendrás una VM corriendo Ubuntu 22.04 que servirá como máquina de control.
+________________________________________
+
+2. Instalar Ansible, Python y demás dependencias en la VM
+
+Una vez creada la VM, conéctate a ella mediante SSH:
+ssh azureuser@<IP_PUBLICA_DE_LA_VM>
+Dentro de la VM, ejecuta los siguientes pasos:
+1.	Actualiza el sistema:
+2.	sudo apt update && sudo apt upgrade -y
+3.	Instala Python y pip:
+Aunque Ubuntu 22.04 trae Python3, asegúrate de tenerlo junto con pip:
+sudo apt install python3 python3-pip -y
+4.	Instala Ansible:
+La forma más sencilla es usar el repositorio de paquetes:
+sudo apt install ansible -y
+Verifica la instalación con:
+ansible --version
+
+________________________________________
+
+3. Instalar Azure CLI en la VM
+
+Para interactuar con Azure desde la máquina de control, instala Azure CLI:
+1.	Ejecuta el script de instalación oficial:
+2.	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+3.	Verifica la instalación:
+4.	az --version
+
+Con esto ya tendrás Azure CLI listo para ejecutar comandos.
+
+________________________________________
+
+4. Crear un Service Principal en Azure
+
+Un Service Principal es una identidad que le permite a Ansible (y otros clientes) autenticarse de forma programática en Azure sin necesidad de usar tus credenciales personales. Sigue estos pasos:
+1.	Obtén tu ID de suscripción:
+Ejecuta:
+az account show --query id -o tsv
+Guarda este valor, lo necesitarás para establecer el scope.
+
+2.	Crea el Service Principal:
+
+Utiliza el siguiente comando, reemplazando "ansible-sp" por el nombre que prefieras:
+az ad sp create-for-rbac --name "ansible-sp" --role Contributor --scopes /subscriptions/<TU_SUBSCRIPTION_ID>
+Por ejemplo, si tu suscripción es 12345678-90ab-cdef-1234-567890abcdef, el comando sería:
+az ad sp create-for-rbac --name "ansible-sp" --role Contributor --scopes /subscriptions/12345678-90ab-cdef-1234-567890abcdef
+Este comando devolverá un JSON similar a:
+{
+  "appId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "displayName": "ansible-sp",
+  "name": "http://ansible-sp",
+  "password": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+  "tenant": "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+}
+
+Guarda con seguridad los valores de appId (Client ID), password (Client Secret) y tenant, ya que los necesitarás para la autenticación.
+
+________________________________________
+
+5. Configurar las credenciales en Ansible
+
+Para que los módulos de Azure en Ansible se autentiquen correctamente, debes exponer las siguientes variables de entorno en la máquina de control (puedes agregarlas a tu archivo ~/.bashrc o ~/.profile):
+export AZURE_SUBSCRIPTION_ID="<TU_SUBSCRIPTION_ID>"
+export AZURE_CLIENT_ID="<APP_ID_DEL_SP>"
+export AZURE_SECRET="<PASSWORD_DEL_SP>"
+export AZURE_TENANT="<TENANT_ID_DEL_SP>"
+
+Por ejemplo:
+
+export AZURE_SUBSCRIPTION_ID="12345678-90ab-cdef-1234-567890abcdef"
+export AZURE_CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+export AZURE_SECRET="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+export AZURE_TENANT="zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+
+Después de agregarlas al archivo, ejecuta:
+
+source ~/.bashrc
+
+De esta forma, al ejecutar tus playbooks de Ansible que usen módulos azure_rm_ (como azure_rm_virtualmachine, azure_rm_resourcegroup, etc.), Ansible tomará automáticamente estas variables para autenticarse en Azure.
+
+________________________________________
+
+Resumen Final
+
+1.	Provisiona una VM en Azure con Ubuntu 22.04 (puedes usar el comando az vm create).
+2.	Conéctate a la VM y actualiza el sistema, instalando Python, pip, y Ansible.
+3.	Instala Azure CLI en la VM usando el script oficial.
+4.	Crea un Service Principal con el comando az ad sp create-for-rbac y guarda el appId, password y tenant.
+5.	Configura las variables de entorno (AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_SECRET y AZURE_TENANT) en la VM para que Ansible pueda autenticarse correctamente en Azure.
+Con estos pasos tendrás tu entorno preparado para utilizar Ansible junto con Azure CLI y conectarte a Azure mediante el Service Principal, lo que te permitirá automatizar la provisión y administración de recursos en Azure de forma segura y controlada.
+
+**************************************************************************************************************************************************************
+**************************************************************************************************************************************************************
+
 ---
 
 ## 2. Estructura General del Taller
