@@ -299,6 +299,7 @@ YAML completo:
       azure_rm_resourcegroup:
         name: rg-k8s-taller
         location: eastus
+        auth_source: cli
 
     - name: Crear red virtual
       azure_rm_virtualnetwork:
@@ -306,6 +307,7 @@ YAML completo:
         name: vnet-k8s
         address_prefixes: "10.0.0.0/16"
         location: eastus
+        auth_source: cli
 
     - name: Crear subred
       azure_rm_subnet:
@@ -313,6 +315,7 @@ YAML completo:
         name: subnet-k8s
         address_prefix: "10.0.1.0/24"
         virtual_network: vnet-k8s
+        auth_source: cli
 
     - name: Crear NIC para control plane
       azure_rm_networkinterface:
@@ -321,6 +324,7 @@ YAML completo:
         virtual_network: vnet-k8s
         subnet: subnet-k8s
         location: eastus
+        auth_source: cli
 
     - name: Crear NIC para worker
       azure_rm_networkinterface:
@@ -329,6 +333,7 @@ YAML completo:
         virtual_network: vnet-k8s
         subnet: subnet-k8s
         location: eastus
+        auth_source: cli
 
     - name: Crear VM control plane
       azure_rm_virtualmachine:
@@ -345,6 +350,7 @@ YAML completo:
           sku: "22_04-lts-gen2"
           version: latest
         location: eastus
+        auth_source: cli
 
     - name: Crear VM worker
       azure_rm_virtualmachine:
@@ -361,6 +367,7 @@ YAML completo:
           sku: "22_04-lts-gen2"
           version: latest
         location: eastus
+        auth_source: cli
 
 ---
 
