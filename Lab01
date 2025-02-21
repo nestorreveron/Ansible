@@ -1,0 +1,405 @@
+A continuación te presento un taller completo y detallado para desplegar un cluster de Kubernetes en Azure utilizando dos máquinas virtuales IaaS (Ubuntu 22.04 D2S_v3) y Ansible. En este taller el primer nodo actuará como *control plane* y el segundo como *worker*. Además, se desplegará un Deployment de Jenkins en el cluster. La idea es automatizar todo el proceso (desde la provisión de la infraestructura hasta la instalación del cluster y la aplicación de Jenkins) utilizando playbooks de Ansible.
+
+---
+
+## 1. Introducción y Prerrequisitos
+
+### Objetivo del taller
+- **Provisiones en Azure**: Crear dos VMs en Azure (sin usar AKS) en un entorno IaaS.
+- **Instalación y configuración de Kubernetes**: Configurar el nodo de control y unir el nodo worker, utilizando *kubeadm*.
+- **Despliegue de Jenkins**: Crear un Deployment de Jenkins dentro del cluster Kubernetes.
+- **Automatización con Ansible**: Todo el proceso se realizará mediante playbooks de Ansible.
+
+### Prerrequisitos
+- **Cuenta de Azure**: Con permisos para crear recursos (grupo de recursos, red, VMs, etc.).
+- **Credenciales y autenticación en Azure**: Puedes usar un *service principal* o configurar el Azure CLI para que Ansible se conecte mediante los módulos *azure_rm_*.
+- **Ansible instalado** en tu máquina de control (por ejemplo, en tu laptop o máquina de administración).
+- Conocimientos básicos de Linux, Kubernetes y Ansible.
+- (Opcional) Conocimientos básicos de YAML para entender la estructura de los playbooks.
+
+---
+
+## 2. Estructura General del Taller
+
+El taller se dividirá en cuatro bloques principales:
+
+1. **Provisionamiento de la Infraestructura en Azure**  
+   Utilizaremos los módulos de Ansible para crear el grupo de recursos, la red virtual, la subred, las interfaces de red y las dos VMs (control plane y worker).
+
+2. **Configuración de las VMs para Kubernetes**  
+   En cada VM instalaremos las dependencias necesarias: actualizaciones, Docker (o containerd), y los paquetes de Kubernetes (*kubeadm*, *kubelet* y *kubectl*). Además, se deshabilitará el *swap* y se ajustarán algunos parámetros de red.
+
+3. **Inicialización del Cluster Kubernetes**  
+   Desde el nodo de control se inicializará el cluster con *kubeadm init* (definiendo, por ejemplo, un rango para la red de pods) y se configurará el archivo kubeconfig. Luego se generará el comando para unir el nodo worker, el cual se ejecutará en el nodo worker.
+
+4. **Despliegue de Jenkins en el Cluster**  
+   Finalmente se creará un Deployment (y un Service para exponerlo) de Jenkins en Kubernetes, utilizando el módulo *k8s* de Ansible para aplicar la definición YAML.
+
+---
+
+## 3. Paso a Paso
+
+### 3.1 Provisionamiento de la Infraestructura en Azure
+
+Crearemos un playbook (por ejemplo, `azure_infra.yml`) que incluya las siguientes tareas:
+
+1. **Crear el Grupo de Recursos**  
+   ```yaml
+   - name: Crear grupo de recursos
+     azure_rm_resourcegroup:
+       name: rg-k8s-taller
+       location: eastus
+   ```
+
+2. **Crear Red Virtual y Subred**  
+   ```yaml
+   - name: Crear red virtual
+     azure_rm_virtualnetwork:
+       resource_group: rg-k8s-taller
+       name: vnet-k8s
+       address_prefixes: "10.0.0.0/16"
+       location: eastus
+
+   - name: Crear subred
+     azure_rm_subnet:
+       resource_group: rg-k8s-taller
+       name: subnet-k8s
+       address_prefix: "10.0.1.0/24"
+       virtual_network: vnet-k8s
+   ```
+
+3. **Crear Interfaces de Red para cada VM**  
+   - Para el nodo *control plane*:
+     ```yaml
+     - name: Crear NIC para control plane
+       azure_rm_networkinterface:
+         resource_group: rg-k8s-taller
+         name: nic-control
+         virtual_network: vnet-k8s
+         subnet: subnet-k8s
+         location: eastus
+     ```
+   - Para el nodo *worker*:
+     ```yaml
+     - name: Crear NIC para worker
+       azure_rm_networkinterface:
+         resource_group: rg-k8s-taller
+         name: nic-worker
+         virtual_network: vnet-k8s
+         subnet: subnet-k8s
+         location: eastus
+     ```
+
+4. **Crear las VMs**  
+   Utiliza el módulo `azure_rm_virtualmachine` para cada nodo. Por ejemplo, para el nodo *control plane*:
+   ```yaml
+   - name: Crear VM control plane
+     azure_rm_virtualmachine:
+       resource_group: rg-k8s-taller
+       name: vm-control
+       vm_size: Standard_D2s_v3
+       admin_username: azureuser
+       ssh_password_enabled: true
+       admin_password: "TuPasswordSeguro123!"
+       network_interfaces: [nic-control]
+       image:
+         publisher: Canonical
+         offer: UbuntuServer
+         sku: "22_04-lts-gen2"
+         version: latest
+       location: eastus
+   ```
+   Y de manera similar para el nodo *worker*:
+   ```yaml
+   - name: Crear VM worker
+     azure_rm_virtualmachine:
+       resource_group: rg-k8s-taller
+       name: vm-worker
+       vm_size: Standard_D2s_v3
+       admin_username: azureuser
+       ssh_password_enabled: true
+       admin_password: "TuPasswordSeguro123!"
+       network_interfaces: [nic-worker]
+       image:
+         publisher: Canonical
+         offer: UbuntuServer
+         sku: "22_04-lts-gen2"
+         version: latest
+       location: eastus
+   ```
+> **Nota:** Asegúrate de ajustar las contraseñas y otros parámetros de seguridad de acuerdo a las buenas prácticas.
+
+Una vez ejecutado este playbook, obtendrás dos VMs en Azure. Registra las direcciones IP públicas para incluirlas en el inventario de Ansible.
+
+---
+
+### 3.2 Configuración de los Nodos para Kubernetes
+
+Con las VMs ya provisionadas, se procede a instalar y configurar todo lo necesario para que actúen como nodos de un cluster Kubernetes. Puedes preparar un playbook (por ejemplo, `setup_k8s_nodes.yml`) que se ejecute contra ambos nodos.
+
+#### Archivo de inventario (hosts.ini)
+```ini
+[control]
+control ansible_host=<IP_PUBLICA_CONTROL> ansible_user=azureuser
+
+[worker]
+worker ansible_host=<IP_PUBLICA_WORKER> ansible_user=azureuser
+```
+
+#### Playbook para configuración de nodos
+```yaml
+- name: Configurar nodos para Kubernetes
+  hosts: control,worker
+  become: yes
+  tasks:
+    - name: Actualizar repositorios y paquetes
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Instalar dependencias básicas
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Deshabilitar swap temporalmente
+      command: swapoff -a
+
+    - name: Deshabilitar swap de forma persistente
+      replace:
+        path: /etc/fstab
+        regexp: '(^.*swap.*$)'
+        replace: '# \1'
+      notify: Reboot if necessary
+
+    - name: Instalar Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Habilitar e iniciar Docker
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: Agregar llave GPG de Kubernetes
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Agregar repositorio de Kubernetes
+      apt_repository:
+        repo: "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+        state: present
+
+    - name: Instalar kubeadm, kubelet y kubectl
+      apt:
+        name:
+          - kubeadm
+          - kubelet
+          - kubectl
+        state: present
+        update_cache: yes
+
+  handlers:
+    - name: Reboot if necessary
+      reboot:
+        msg: "Rebooting to apply swap changes"
+        pre_reboot_delay: 5
+```
+
+Este playbook se encarga de actualizar el sistema, instalar las dependencias, Docker y los paquetes de Kubernetes, además de deshabilitar el swap (requisito para Kubernetes).
+
+---
+
+### 3.3 Inicialización del Cluster Kubernetes
+
+Dividiremos este proceso en dos plays, uno para el nodo *control* y otro para el nodo *worker*.
+
+#### Play para el nodo de Control Plane
+```yaml
+- name: Inicializar cluster Kubernetes en el nodo control plane
+  hosts: control
+  become: yes
+  tasks:
+    - name: Inicializar el cluster con kubeadm
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: kubeadm_init
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Crear directorio .kube para el usuario azureuser
+      file:
+        path: /home/azureuser/.kube
+        state: directory
+        owner: azureuser
+        mode: 0755
+
+    - name: Copiar el archivo de configuración de Kubernetes
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/azureuser/.kube/config
+        owner: azureuser
+        mode: 0644
+
+    - name: Instalar red de pods (Flannel, por ejemplo)
+      shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Obtener comando de join para unir nodos workers
+      shell: kubeadm token create --print-join-command
+      register: join_command
+```
+
+> **Importante:** En este play se configura el kubeconfig para el usuario (en este ejemplo, *azureuser*). Además, se aplica una red para los pods (en este ejemplo usamos Flannel; puedes elegir otra según tus preferencias).
+
+#### Play para el nodo Worker
+```yaml
+- name: Unir nodo worker al cluster
+  hosts: worker
+  become: yes
+  tasks:
+    - name: Ejecutar comando join en el nodo worker
+      shell: "{{ hostvars[groups['control'][0]].join_command.stdout }} --ignore-preflight-errors=all"
+      args:
+        warn: false
+```
+
+> **Nota:** Usamos `hostvars` para obtener el comando de join generado en el nodo de control. El parámetro `--ignore-preflight-errors=all` puede ayudar en ambientes de testing, pero en producción convendría solucionar esos errores.
+
+---
+
+### 3.4 Despliegue de Jenkins en Kubernetes
+
+Una vez que el cluster esté funcionando, procederemos a desplegar Jenkins mediante un Deployment y un Service.
+
+#### 3.4.1 Definición YAML para Jenkins
+
+Crea un archivo llamado `jenkins-deployment.yaml` con el siguiente contenido (puedes combinar ambos objetos o separarlos en dos archivos):
+
+```yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  labels:
+    app: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:lts
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-service
+spec:
+  type: NodePort
+  selector:
+    app: jenkins
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+    nodePort: 30000
+```
+
+#### 3.4.2 Playbook para desplegar Jenkins
+
+Utilizaremos el módulo `k8s` de Ansible para aplicar la definición YAML. Crea un playbook (por ejemplo, `deploy_jenkins.yml`) que se ejecute en el nodo control (donde tenemos el kubeconfig):
+
+```yaml
+- name: Desplegar Jenkins en el cluster Kubernetes
+  hosts: control
+  become: yes
+  tasks:
+    - name: Instalar cliente Python para Kubernetes
+      pip:
+        name: kubernetes
+        state: present
+
+    - name: Aplicar manifiesto de Jenkins
+      k8s:
+        state: present
+        definition: "{{ lookup('file', 'jenkins-deployment.yaml') }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+```
+
+Con este playbook se crea el Deployment y el Service, y Jenkins quedará expuesto en el puerto 30000 de los nodos.
+
+---
+
+## 4. Ejecución y Validación
+
+1. **Provisiona la infraestructura en Azure**  
+   Ejecuta el playbook `azure_infra.yml`:
+   ```bash
+   ansible-playbook azure_infra.yml
+   ```
+
+2. **Configura los nodos para Kubernetes**  
+   Conecta tus VMs al inventario (archivo `hosts.ini`) y ejecuta:
+   ```bash
+   ansible-playbook -i hosts.ini setup_k8s_nodes.yml
+   ```
+
+3. **Inicializa el cluster**  
+   Primero ejecuta el play para el nodo *control*:
+   ```bash
+   ansible-playbook -i hosts.ini init_control_plane.yml
+   ```
+   Luego ejecuta el play para el nodo *worker*:
+   ```bash
+   ansible-playbook -i hosts.ini join_worker.yml
+   ```
+
+4. **Despliega Jenkins**  
+   Finalmente, desde el nodo control, aplica el manifiesto de Jenkins:
+   ```bash
+   ansible-playbook -i hosts.ini deploy_jenkins.yml
+   ```
+
+5. **Validación**  
+   - Desde el nodo control o desde tu máquina de administración (con el kubeconfig correspondiente), ejecuta:
+     ```bash
+     kubectl get nodes
+     kubectl get pods -A
+     ```
+     Deberías ver el nodo control y el nodo worker unidos y el pod de Jenkins en ejecución.
+   - Accede a Jenkins navegando a `http://<IP_de_algún_nodo>:30000`.
+
+---
+
+## 5. Consideraciones Finales
+
+- **Seguridad**: Asegúrate de gestionar adecuadamente las contraseñas y claves SSH, y de utilizar conexiones seguras en un ambiente de producción.
+- **Variables y Roles**: En un entorno real se recomienda estructurar el playbook en roles (por ejemplo, un rol para la provisión en Azure, otro para la configuración de nodos y otro para el despliegue en Kubernetes) y utilizar *variables* para facilitar la personalización.
+- **Errores comunes**:  
+  - Verifica que el token generado en el nodo control no expire antes de ejecutarlo en el nodo worker.  
+  - Asegúrate de que las VMs puedan comunicarse entre sí (revisa reglas de red y NSG en Azure).
+
+Con este taller tendrás un flujo completo y automatizado para desplegar un cluster Kubernetes en Azure (sin usar AKS) y realizar el despliegue de Jenkins utilizando Ansible. ¡Éxito en tu implementación y aprendizaje!
+
+---
+
+Este instructivo está diseñado para ser sencillo y práctico, pero recuerda que en cada ambiente puede haber particularidades. Ajusta parámetros, tiempos de espera y otros detalles conforme a tus necesidades específicas.
