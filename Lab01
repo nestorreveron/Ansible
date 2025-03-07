@@ -267,8 +267,8 @@ Crearemos un playbook (por ejemplo, `azure_infra.yml`) que incluya las siguiente
        network_interfaces: [nic-control]
        image:
          publisher: Canonical
-         offer: UbuntuServer
-         sku: "22_04-lts-gen2"
+         offer: 0001-com-ubuntu-server-jammy
+         sku: "22_04-lts"
          version: latest
        location: eastus
    ```
@@ -285,8 +285,8 @@ Crearemos un playbook (por ejemplo, `azure_infra.yml`) que incluya las siguiente
        network_interfaces: [nic-worker]
        image:
          publisher: Canonical
-         offer: UbuntuServer
-         sku: "22_04-lts-gen2"
+         offer: 0001-com-ubuntu-server-jammy
+         sku: "22_04-lts"
          version: latest
        location: eastus
    ```
@@ -389,8 +389,8 @@ YAML completo:
         network_interfaces: [nic-control]
         image:
           publisher: Canonical
-          offer: UbuntuServer
-          sku: "22_04-lts-gen2"
+          offer: 0001-com-ubuntu-server-jammy
+          sku: "22_04-lts"
           version: latest
         location: eastus
         auth_source: cli
@@ -406,8 +406,8 @@ YAML completo:
         network_interfaces: [nic-worker]
         image:
           publisher: Canonical
-          offer: UbuntuServer
-          sku: "22_04-lts-gen2"
+          offer: 0001-com-ubuntu-server-jammy
+          sku: "22_04-lts"
           version: latest
         location: eastus
         auth_source: cli
