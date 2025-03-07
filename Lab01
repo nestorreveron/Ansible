@@ -677,13 +677,33 @@ Este playbook anterior se encarga de actualizar el sistema, instalar las depende
 Dividiremos este proceso en dos plays, uno para el nodo *control* y otro para el nodo *worker*.
 
 #### Play para el nodo de Control Plane
-```yaml
 - name: Inicializar cluster Kubernetes en el nodo control plane
   hosts: control
   become: yes
   tasks:
-    - name: Inicializar el cluster con kubeadm
-      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+    - name: Obtener la dirección IP privada del nodo control plane
+      set_fact:
+        control_plane_ip: "{{ ansible_default_ipv4.address }}"
+
+    - name: Configurar alias DNS para el nodo control plane en /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ control_plane_ip }} k8scp"
+        state: present
+
+    - name: Crear archivo de configuración kubeadm-config.yaml
+      copy:
+        dest: /root/kubeadm-config.yaml
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          kubernetesVersion: 1.28.1
+          controlPlaneEndpoint: "k8scp:6443"
+        owner: root
+        mode: '0644'
+
+    - name: Inicializar el cluster con kubeadm usando kubeadm-config.yaml
+      shell: kubeadm init --config=/root/kubeadm-config.yaml
       register: kubeadm_init
       args:
         creates: /etc/kubernetes/admin.conf
@@ -702,7 +722,7 @@ Dividiremos este proceso en dos plays, uno para el nodo *control* y otro para el
         owner: azureuser
         mode: 0644
 
-    - name: Instalar red de pods (Flannel, por ejemplo)
+    - name: Instalar red de pods (Flannel)
       shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
@@ -710,20 +730,31 @@ Dividiremos este proceso en dos plays, uno para el nodo *control* y otro para el
     - name: Obtener comando de join para unir nodos workers
       shell: kubeadm token create --print-join-command
       register: join_command
+
+    - name: Guardar el comando de join en hostvars
+      set_fact:
+        join_command_final: "{{ join_command.stdout }}"
+
 ```
 
 > **Importante:** En este play se configura el kubeconfig para el usuario (en este ejemplo, *azureuser*). Además, se aplica una red para los pods (en este ejemplo usamos Flannel; puedes elegir otra según tus preferencias).
 
 #### Play para el nodo Worker
-```yaml
 - name: Unir nodo worker al cluster
   hosts: worker
   become: yes
   tasks:
+    - name: Configurar alias DNS para el nodo control plane en /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars['control']['control_plane_ip'] }} k8scp"
+        state: present
+
     - name: Ejecutar comando join en el nodo worker
-      shell: "{{ hostvars[groups['control'][0]].join_command.stdout }} --ignore-preflight-errors=all"
+      shell: "{{ hostvars['control']['join_command_final'] }} --ignore-preflight-errors=all"
       args:
         warn: false
+
 ```
 
 > **Nota:** Usamos `hostvars` para obtener el comando de join generado en el nodo de control. El parámetro `--ignore-preflight-errors=all` puede ayudar en ambientes de testing, pero en producción convendría solucionar esos errores.
