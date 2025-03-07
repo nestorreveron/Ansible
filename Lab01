@@ -474,7 +474,6 @@ ansible -i hosts.ini worker -m ping
         upgrade: dist
         dpkg_options: "--force-confdef --force-confold"
     
-
     ###########################################################################
     # 2. Instalar herramientas básicas (curl, vim, etc.)
     ###########################################################################
@@ -532,103 +531,101 @@ ansible -i hosts.ini worker -m ping
     ###########################################################################
     # 6. Instalar containerd
     ###########################################################################
-    - name: Crear directorio para llaves GPG de Docker
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
+    - name: Instalar containerd y configurar systemd
+      block:
+        - name: Crear directorio para llaves GPG de Docker
+          file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
 
-    - name: Importar llave GPG de Docker
-      shell: |
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-      args:
-        creates: /etc/apt/keyrings/docker.gpg
+        - name: Importar llave GPG de Docker
+          shell: |
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+            | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          args:
+            creates: /etc/apt/keyrings/docker.gpg
 
-    - name: Agregar repositorio Docker (para containerd)
-      shell: |
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        - name: Agregar repositorio Docker (para containerd)
+          shell: |
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-    - name: Actualizar repositorios tras agregar Docker
-      apt:
-        update_cache: yes
+        - name: Actualizar repositorios tras agregar Docker
+          apt:
+            update_cache: yes
 
-    - name: Instalar containerd
-      apt:
-        name: containerd.io
-        state: present
-        update_cache: yes
+        - name: Instalar containerd
+          apt:
+            name: containerd.io
+            state: present
+            update_cache: yes
 
-    - name: Generar archivo de configuración por defecto de containerd
-      shell: |
-        containerd config default | tee /etc/containerd/config.toml
-      args:
-        creates: /etc/containerd/config.toml
+        - name: Generar archivo de configuración por defecto de containerd
+          shell: |
+            containerd config default | tee /etc/containerd/config.toml
+          args:
+            creates: /etc/containerd/config.toml
 
-    - name: Ajustar SystemdCgroup a true en /etc/containerd/config.toml
-      replace:
-        path: /etc/containerd/config.toml
-        regexp: 'SystemdCgroup = false'
-        replace: 'SystemdCgroup = true'
+        - name: Ajustar SystemdCgroup a true en /etc/containerd/config.toml
+          replace:
+            path: /etc/containerd/config.toml
+            regexp: 'SystemdCgroup = false'
+            replace: 'SystemdCgroup = true'
 
-    - name: Reiniciar containerd
-      systemd:
-        name: containerd
-        state: restarted
-        enabled: yes
+        - name: Reiniciar containerd
+          systemd:
+            name: containerd
+            state: restarted
+            enabled: yes
 
     ###########################################################################
     # 7. Instalar kubeadm, kubelet y kubectl (Kubernetes 1.28.x)
     ###########################################################################
-    - name: Crear directorio para llaves GPG de Kubernetes
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
+    - name: Instalar Kubernetes
+      block:
+        - name: Crear directorio para llaves GPG de Kubernetes
+          file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
 
-    - name: Importar llave GPG de Kubernetes
+        - name: Importar llave GPG de Kubernetes
+          shell: |
+            curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key \
+            | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+          args:
+            creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+        - name: Agregar repositorio Kubernetes 1.28
+          shell: |
+            echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list > /dev/null
+          args:
+            creates: /etc/apt/sources.list.d/kubernetes.list
+
+        - name: Actualizar repositorios tras agregar Kubernetes
+          apt:
+            update_cache: yes
+
+        - name: Instalar kubeadm, kubelet y kubectl (versión 1.28.1-1.1)
+          apt:
+            name:
+              - kubeadm=1.28.1-1.1
+              - kubelet=1.28.1-1.1
+              - kubectl=1.28.1-1.1
+            state: present
+            update_cache: yes
+
+    ###########################################################################
+    # 8. Aplicar hold en paquetes de Kubernetes
+    ###########################################################################
+    - name: Bloquear versiones de paquetes de Kubernetes
       shell: |
-        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key \
-        | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-      args:
-        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        apt-mark hold kubeadm kubelet kubectl
 
-    - name: Agregar repositorio Kubernetes 1.28
-      shell: |
-        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list > /dev/null
-      args:
-        creates: /etc/apt/sources.list.d/kubernetes.list
-
-    - name: Actualizar repositorios tras agregar Kubernetes
-      apt:
-        update_cache: yes
-
-    - name: Instalar kubeadm, kubelet y kubectl (versión 1.28.1-1.1)
-      apt:
-        name:
-          - kubeadm=1.28.1-1.1
-          - kubelet=1.28.1-1.1
-          - kubectl=1.28.1-1.1
-        state: present
-        update_cache: yes
-      
-      ## Pendiente por ajustar ###
-      
-    - name: Hold kubeadm
-    ansible.builtin.dpkg_selections:
-    name: kubeadm
-    selection: hold
-    
-    - name: Hold kubeadm
-    ansible.builtin.dpkg_selections:
-    name: kubelet
-    selection: hold
-    
-    - name: Hold kubeadm
-    ansible.builtin.dpkg_selections:
-    name: kubectl
-    selection: hold
-
+- name: Configurar /etc/hosts en todos los nodos
+  hosts: control,worker
+  become: yes
+  tasks:
     - name: Obtener la dirección IP privada del nodo control plane
       command: "hostname -I | awk '{print $1}'"
       register: private_ip
@@ -639,31 +636,28 @@ ansible -i hosts.ini worker -m ping
         control_plane_ip: "{{ private_ip.stdout }}"
       when: "'control' in inventory_hostname"
 
-    - name: Configurar /etc/hosts en todos los nodos
-      hosts: control,worker
-      become: yes
-      tasks:
-        - name: Agregar alias DNS para el nodo control plane en /etc/hosts
-          lineinfile:
-            path: /etc/hosts
-            line: "{{ hostvars['control'].control_plane_ip }} k8scp"
-            state: present
-          when: "'worker' in inventory_hostname or 'control' in inventory_hostname"
+    - name: Agregar alias DNS para el nodo control plane en /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars['control'].control_plane_ip }} k8scp"
+        state: present
+      when: "'worker' in inventory_hostname or 'control' in inventory_hostname"
 
-    - name: Crear archivo de configuración kubeadm-config.yaml
-      hosts: control
-      become: yes
-      tasks:
-        - name: Generar archivo kubeadm-config.yaml
-          copy:
-            dest: /root/kubeadm-config.yaml
-            content: |
-              apiVersion: kubeadm.k8s.io/v1beta3
-              kind: ClusterConfiguration
-              kubernetesVersion: 1.28.1
-              controlPlaneEndpoint: "k8scp:6443"
-            owner: root
-            mode: '0644'
+- name: Crear archivo de configuración kubeadm-config.yaml
+  hosts: control
+  become: yes
+  tasks:
+    - name: Generar archivo kubeadm-config.yaml
+      copy:
+        dest: /root/kubeadm-config.yaml
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          kubernetesVersion: 1.28.1
+          controlPlaneEndpoint: "k8scp:6443"
+        owner: root
+        mode: '0644'
+
 
 
 
