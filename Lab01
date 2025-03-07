@@ -473,6 +473,7 @@ ansible -i hosts.ini worker -m ping
         update_cache: yes
         upgrade: dist
         dpkg_options: "--force-confdef --force-confold"
+    
 
     ###########################################################################
     # 2. Instalar herramientas básicas (curl, vim, etc.)
@@ -614,23 +615,47 @@ ansible -i hosts.ini worker -m ping
           - kubectl=1.28.1-1.1
         state: present
         update_cache: yes
+      
+      ## Pendiente por ajustar ###
+      
+    - name: Hold kubeadm
+    ansible.builtin.dpkg_selections:
+    name: kubeadm
+    selection: hold
+    
+    - name: Hold kubeadm
+    ansible.builtin.dpkg_selections:
+    name: kubelet
+    selection: hold
+    
+    - name: Hold kubeadm
+    ansible.builtin.dpkg_selections:
+    name: kubectl
+    selection: hold
 
-## Pendiente por ajustar ###
+    - name: Obtener la dirección IP privada del nodo control plane
+      command: "hostname -I | awk '{print $1}'"
+      register: private_ip
+      when: "'control' in inventory_hostname"
 
-- name: Hold kubeadm
-ansible.builtin.dpkg_selections:
-name: kubeadm
-selection: hold
+    - name: Guardar la IP privada del nodo control plane para uso global
+      set_fact:
+        control_plane_ip: "{{ private_ip.stdout }}"
+      when: "'control' in inventory_hostname"
 
-- name: Hold kubeadm
-ansible.builtin.dpkg_selections:
-name: kubelet
-selection: hold
+    - name: Configurar /etc/hosts en todos los nodos
+      hosts: control,worker
+      become: yes
+      tasks:
+        - name: Agregar alias DNS para el nodo control plane en /etc/hosts
+          lineinfile:
+            path: /etc/hosts
+            line: "{{ hostvars['control'].control_plane_ip }} k8scp"
+            state: present
+          when: "'worker' in inventory_hostname or 'control' in inventory_hostname"
 
-- name: Hold kubeadm
-ansible.builtin.dpkg_selections:
-name: kubectl
-selection: hold
+
+
 
 
 
