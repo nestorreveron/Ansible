@@ -595,9 +595,7 @@ ansible -i hosts.ini worker -m ping
 
     - name: Agregar repositorio Kubernetes 1.28
       shell: |
-        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
-        https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" \
-        | tee /etc/apt/sources.list.d/kubernetes.list > /dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list > /dev/null
       args:
         creates: /etc/apt/sources.list.d/kubernetes.list
 
