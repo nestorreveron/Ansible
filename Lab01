@@ -666,14 +666,9 @@ ansible -i hosts.ini worker -m ping
         owner: root
         mode: '0644'
 
-
-
-
-
-
 ```
 
-Este playbook se encarga de actualizar el sistema, instalar las dependencias, Docker y los paquetes de Kubernetes, además de deshabilitar el swap (requisito para Kubernetes).
+Este playbook anterior se encarga de actualizar el sistema, instalar las dependencias, Docker y los paquetes de Kubernetes, además de deshabilitar el swap (requisito para Kubernetes).
 
 ---
 
