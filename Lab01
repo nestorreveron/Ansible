@@ -632,7 +632,7 @@ ansible -i hosts.ini worker -m ping
     - name: Guardar la IP privada del nodo control plane para uso global
       set_fact:
         control_plane_ip: "{{ private_ip.stdout }}"
-      when: "'control' in inventory_hostname""
+      when: "'control' in inventory_hostname"
 
 - name: Configurar alias DNS en todos los nodos
   hosts: control,worker
