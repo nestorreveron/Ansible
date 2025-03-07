@@ -472,7 +472,9 @@ ansible -i hosts.ini worker -m ping
       apt:
         update_cache: yes
         upgrade: dist
-        dpkg_options: "--force-confdef --force-confold"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+        
     
     ###########################################################################
     # 2. Instalar herramientas básicas (curl, vim, etc.)
