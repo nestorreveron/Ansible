@@ -625,14 +625,14 @@ ansible -i hosts.ini worker -m ping
   become: yes
   tasks:
     - name: Obtener la dirección IP privada del nodo control plane
-      command: "hostname -I | awk '{print $1}'"
+      command: "ip -4 addr show eth0 | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){3}'"
       register: private_ip
       when: "'control' in inventory_hostname"
 
     - name: Guardar la IP privada del nodo control plane para uso global
       set_fact:
         control_plane_ip: "{{ private_ip.stdout }}"
-      when: "'control' in inventory_hostname"
+      when: "'control' in inventory_hostname""
 
     - name: Agregar alias DNS para el nodo control plane en /etc/hosts
       lineinfile:
