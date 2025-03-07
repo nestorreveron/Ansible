@@ -114,9 +114,13 @@ Guarda este valor, lo necesitarás para establecer el scope.
 2.	Crea el Service Principal:
 
 Utiliza el siguiente comando, reemplazando "ansible-sp" por el nombre que prefieras:
+
 az ad sp create-for-rbac --name "ansible-sp" --role Contributor --scopes /subscriptions/<TU_SUBSCRIPTION_ID>
+
 Por ejemplo, si tu suscripción es 12345678-90ab-cdef-1234-567890abcdef, el comando sería:
+
 az ad sp create-for-rbac --name "ansible-sp" --role Contributor --scopes /subscriptions/12345678-90ab-cdef-1234-567890abcdef
+
 Este comando devolverá un JSON similar a:
 {
   "appId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
