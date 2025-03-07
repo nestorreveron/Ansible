@@ -634,6 +634,10 @@ ansible -i hosts.ini worker -m ping
         control_plane_ip: "{{ private_ip.stdout }}"
       when: "'control' in inventory_hostname""
 
+- name: Configurar alias DNS en todos los nodos
+  hosts: control,worker
+  become: yes
+  tasks:
     - name: Agregar alias DNS para el nodo control plane en /etc/hosts
       lineinfile:
         path: /etc/hosts
