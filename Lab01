@@ -623,41 +623,41 @@ ansible -i hosts.ini worker -m ping
       shell: |
         apt-mark hold kubeadm kubelet kubectl
 
-- name: Configurar /etc/hosts en todos los nodos
-  hosts: control,worker
-  become: yes
-  tasks:
-    - name: Obtener la dirección IP privada del nodo control plane
-      command: "hostname -I | awk '{print $1}'"
-      register: private_ip
-      when: "'control' in inventory_hostname"
-
-    - name: Guardar la IP privada del nodo control plane para uso global
-      set_fact:
-        control_plane_ip: "{{ private_ip.stdout }}"
-      when: "'control' in inventory_hostname"
-
-    - name: Agregar alias DNS para el nodo control plane en /etc/hosts
-      lineinfile:
-        path: /etc/hosts
-        line: "{{ hostvars['control'].control_plane_ip }} k8scp"
-        state: present
-      when: "'worker' in inventory_hostname or 'control' in inventory_hostname"
-
-- name: Crear archivo de configuración kubeadm-config.yaml
-  hosts: control
-  become: yes
-  tasks:
-    - name: Generar archivo kubeadm-config.yaml
-      copy:
-        dest: /root/kubeadm-config.yaml
-        content: |
-          apiVersion: kubeadm.k8s.io/v1beta3
-          kind: ClusterConfiguration
-          kubernetesVersion: 1.28.1
-          controlPlaneEndpoint: "k8scp:6443"
-        owner: root
-        mode: '0644'
+    - name: Configurar /etc/hosts en todos los nodos
+      hosts: control,worker
+      become: yes
+      tasks:
+        - name: Obtener la dirección IP privada del nodo control plane
+          command: "hostname -I | awk '{print $1}'"
+          register: private_ip
+          when: "'control' in inventory_hostname"
+    
+        - name: Guardar la IP privada del nodo control plane para uso global
+          set_fact:
+            control_plane_ip: "{{ private_ip.stdout }}"
+          when: "'control' in inventory_hostname"
+    
+        - name: Agregar alias DNS para el nodo control plane en /etc/hosts
+          lineinfile:
+            path: /etc/hosts
+            line: "{{ hostvars['control'].control_plane_ip }} k8scp"
+            state: present
+          when: "'worker' in inventory_hostname or 'control' in inventory_hostname"
+    
+    - name: Crear archivo de configuración kubeadm-config.yaml
+      hosts: control
+      become: yes
+      tasks:
+        - name: Generar archivo kubeadm-config.yaml
+          copy:
+            dest: /root/kubeadm-config.yaml
+            content: |
+              apiVersion: kubeadm.k8s.io/v1beta3
+              kind: ClusterConfiguration
+              kubernetesVersion: 1.28.1
+              controlPlaneEndpoint: "k8scp:6443"
+            owner: root
+            mode: '0644'
 
 
 
