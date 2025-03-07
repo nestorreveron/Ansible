@@ -513,8 +513,7 @@ ansible -i hosts.ini worker -m ping
       shell: |
         modprobe overlay
         modprobe br_netfilter
-      args:
-        warn: false
+
 
     ###########################################################################
     # 5. Configurar parámetros de red para Kubernetes
