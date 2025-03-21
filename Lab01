@@ -669,6 +669,8 @@ ansible -i hosts.ini worker -m ping
         mode: '0644'
 
 ```
+ansible-playbook setupk8s.yaml -i hosts.ini
+
 
 Este playbook anterior se encarga de actualizar el sistema, instalar las dependencias, Docker y los paquetes de Kubernetes, además de deshabilitar el swap (requisito para Kubernetes).
 
