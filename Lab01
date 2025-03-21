@@ -448,6 +448,8 @@ Crear en Home el archivo:
 vi ansible.cfg
 [defaults]
 host_key_checking = false
+(OPTIONAL )
+ssh-copy-id azureuser@68.154.14.118 (CP y Woker y todo los nodos)
 
 Si desean probar que funciona:
 
